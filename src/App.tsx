@@ -143,22 +143,26 @@ export default function App() {
     // 2. DETECTAR NÚMERO DE PEDIDO
     let orderNumber = cleanText.match(/(?:pedido|orden|p|#|n|num|nº)\s*(\d+)/i)?.[1];
     
+    // Si no se detectó con palabra clave, pero hay números, el primero suele ser el pedido
+    if (!orderNumber && allNumbers.length > 0) {
+      orderNumber = allNumbers[0];
+    }
+    
     // 3. DETECTAR NÚMERO DE CASA
     let houseNumber = cleanText.match(/(?:casa|c|no|numero|n|num|nº)\s*(\d+)/i)?.[1];
     
-    // Lógica de desempate si se detectó el mismo número para ambos
+    // Si el número de casa es el mismo que el de pedido (error de regex), buscamos el siguiente número
     if (orderNumber && houseNumber && orderNumber === houseNumber) {
-      const houseMatches = cleanText.match(/(?:casa|c|no|numero|n|num|nº)\s*(\d+)/gi);
-      if (houseMatches && houseMatches.length > 1) {
-        houseNumber = houseMatches[1].replace(/\D/g, '');
-      } else if (allNumbers.length >= 2) {
+      if (allNumbers.length >= 2) {
+        // Si hay más números, el último suele ser la casa
         houseNumber = allNumbers[allNumbers.length - 1];
       }
     }
 
-    // Asignación por defecto por posición si fallan los regex
-    if (!orderNumber && allNumbers.length > 0) orderNumber = allNumbers[0];
-    if (!houseNumber && allNumbers.length > 1) houseNumber = allNumbers[allNumbers.length - 1];
+    // Si aún no hay casa, pero hay al menos 2 números, el último es la casa
+    if (!houseNumber && allNumbers.length >= 2) {
+      houseNumber = allNumbers[allNumbers.length - 1];
+    }
 
     // 4. DETECTAR CALLE (Limpieza agresiva)
     let street = '';
@@ -176,11 +180,11 @@ export default function App() {
         if (w.match(/^\d+$/)) return false;
         // Quitamos si es una palabra clave exacta
         if (keywords.includes(w)) return false;
-        // Quitamos si es una palabra clave pegada a un número (ej: p80, c30)
-        if (w.match(/^[a-z]\d+$/)) return false;
-        // Quitamos si es el número de pedido o casa ya detectado
-        if (orderNumber && w.includes(orderNumber)) return false;
-        if (houseNumber && w.includes(houseNumber)) return false;
+        // Quitamos si es una palabra clave pegada a un número (ej: p80, c30, #80)
+        if (w.match(/^[a-z#]\d+$/)) return false;
+        // Quitamos si contiene el número de pedido o casa ya detectado
+        if (orderNumber && (w === orderNumber || w.includes(orderNumber))) return false;
+        if (houseNumber && (w === houseNumber || w.includes(houseNumber))) return false;
         
         return w.length > 2;
       });
@@ -398,8 +402,8 @@ export default function App() {
                     >
                       <img 
                         src={order.navigator === 'google' 
-                          ? "https://www.google.com/images/branding/product/ico/maps15_24dp.ico" 
-                          : "https://waze.com/favicon.ico"
+                          ? "https://upload.wikimedia.org/wikipedia/commons/a/aa/Google_Maps_icon_%282020%29.svg" 
+                          : "https://upload.wikimedia.org/wikipedia/commons/6/66/Waze_icon.svg"
                         } 
                         className="w-8 h-8 object-contain" 
                         alt={order.navigator} 
@@ -425,7 +429,7 @@ export default function App() {
                       : 'bg-zinc-800 text-zinc-500 opacity-40 grayscale'
                     }`}
                   >
-                    <img src="https://www.google.com/images/branding/product/ico/maps15_24dp.ico" className="w-3 h-3" alt="" />
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/a/aa/Google_Maps_icon_%282020%29.svg" className="w-3 h-3" alt="" />
                     Google
                   </button>
                   <button 
@@ -436,7 +440,7 @@ export default function App() {
                       : 'bg-zinc-800 text-zinc-500 opacity-40 grayscale'
                     }`}
                   >
-                    <img src="https://waze.com/favicon.ico" className="w-3 h-3" alt="" />
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/6/66/Waze_icon.svg" className="w-3 h-3" alt="" />
                     Waze
                   </button>
                 </div>
