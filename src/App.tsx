@@ -21,6 +21,7 @@ export default function App() {
   const recognitionRef = useRef<any>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const fullTranscriptRef = useRef('');
+  const transcriptPreviewRef = useRef('');
 
   // Carga inicial ultra-segura
   useEffect(() => {
@@ -70,19 +71,11 @@ export default function App() {
           }
           
           if (final) {
-            // Filtro para evitar que palabras idénticas se peguen (ej: "casa casa")
-            const lastWords = fullTranscriptRef.current.trim().split(' ');
-            const newWords = final.trim().split(' ');
-            
-            if (lastWords[lastWords.length - 1].toLowerCase() !== newWords[0].toLowerCase()) {
-              fullTranscriptRef.current += ' ' + final;
-            } else {
-              // Si la primera palabra nueva es igual a la última vieja, solo añadimos el resto
-              fullTranscriptRef.current += ' ' + newWords.slice(1).join(' ');
-            }
+            fullTranscriptRef.current += ' ' + final;
           }
 
           const displayValue = (fullTranscriptRef.current + ' ' + interim).trim();
+          transcriptPreviewRef.current = displayValue;
           setTranscriptPreview(displayValue);
           
           if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
@@ -90,7 +83,7 @@ export default function App() {
             if (recognitionRef.current) {
               recognitionRef.current.stop();
             }
-          }, 6000); 
+          }, 5000); 
         };
 
         recognition.onstart = () => {
@@ -106,9 +99,12 @@ export default function App() {
 
         recognition.onend = () => {
           setIsListening(false);
-          if (fullTranscriptRef.current.trim()) {
-            processVoiceInput(fullTranscriptRef.current);
+          // CRITICAL: Usamos el preview que incluye lo último que se dijo aunque no sea "final"
+          const finalValue = transcriptPreviewRef.current || fullTranscriptRef.current;
+          if (finalValue.trim()) {
+            processVoiceInput(finalValue);
             fullTranscriptRef.current = '';
+            transcriptPreviewRef.current = '';
             setTranscriptPreview('');
           }
           if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
@@ -443,7 +439,7 @@ export default function App() {
                       <img 
                         src={order.navigator === 'google' 
                           ? "https://www.gstatic.com/images/branding/product/2x/maps_512dp.png" 
-                          : "https://cdn.worldvectorlogo.com/logos/waze.svg"
+                          : "https://upload.wikimedia.org/wikipedia/commons/thumb/6/66/Waze_icon.svg/512px-Waze_icon.svg.png"
                         } 
                         className="w-8 h-8 object-contain" 
                         alt={order.navigator} 
@@ -481,7 +477,7 @@ export default function App() {
                       : 'bg-zinc-800 text-zinc-500 opacity-40 grayscale'
                     }`}
                   >
-                    <img src="https://cdn.worldvectorlogo.com/logos/waze.svg" className="w-3 h-3" alt="" referrerPolicy="no-referrer" />
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/66/Waze_icon.svg/512px-Waze_icon.svg.png" className="w-3 h-3" alt="" referrerPolicy="no-referrer" />
                     Waze
                   </button>
                 </div>
