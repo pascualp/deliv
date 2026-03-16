@@ -132,8 +132,7 @@ export default function App() {
   }, [orders, isLoaded]);
 
   const processVoiceInput = (text: string) => {
-    // Limpieza más inteligente: solo quitamos palabras repetidas seguidas (ej: "casa casa" -> "casa")
-    // No usamos regex de caracteres repetidos para no romper números como "11" o "22"
+    // Limpieza básica
     let cleanText = text.toLowerCase().trim()
       .replace(/\b(\w+)\s+\1\b/g, '$1') 
       .replace(/\s+/g, ' ');
@@ -142,47 +141,51 @@ export default function App() {
     const allNumbers = cleanText.match(/\d+/g) || [];
     
     // 2. DETECTAR NÚMERO DE PEDIDO
-    // Buscamos: pedido 8, p8, orden 8, #8, n8, num 8
     let orderNumber = cleanText.match(/(?:pedido|orden|p|#|n|num|nº)\s*(\d+)/i)?.[1];
     
     // 3. DETECTAR NÚMERO DE CASA
-    // Buscamos: casa 30, c30, no 30, numero 30, n 30
     let houseNumber = cleanText.match(/(?:casa|c|no|numero|n|num|nº)\s*(\d+)/i)?.[1];
     
-    // Si el número de casa y pedido son el mismo (porque el regex pescó el mismo), 
-    // intentamos diferenciarlos por posición
+    // Lógica de desempate si se detectó el mismo número para ambos
     if (orderNumber && houseNumber && orderNumber === houseNumber) {
-      // Si dijo "pedido X casa Y", el primer regex de pedido suele ganar.
-      // Buscamos específicamente el de casa que NO sea el de pedido
       const houseMatches = cleanText.match(/(?:casa|c|no|numero|n|num|nº)\s*(\d+)/gi);
       if (houseMatches && houseMatches.length > 1) {
         houseNumber = houseMatches[1].replace(/\D/g, '');
       } else if (allNumbers.length >= 2) {
-        // Si hay dos números y el regex se confundió, el segundo suele ser la casa
         houseNumber = allNumbers[allNumbers.length - 1];
       }
     }
 
-    // Si después de todo no hay números detectados pero hay números en la frase:
+    // Asignación por defecto por posición si fallan los regex
     if (!orderNumber && allNumbers.length > 0) orderNumber = allNumbers[0];
     if (!houseNumber && allNumbers.length > 1) houseNumber = allNumbers[allNumbers.length - 1];
 
-    // 4. DETECTAR CALLE
-    // Buscamos lo que esté después de "calle", "av", etc.
-    let street = cleanText.match(/(?:calle|avenida|av|pje|pasaje)\s+([a-z0-9\s]+?)(?=\s+(?:casa|pedido|nota|orden|número|numero|p\d|c\d|#|n\d|$))/i)?.[1];
+    // 4. DETECTAR CALLE (Limpieza agresiva)
+    let street = '';
+    const streetMatch = cleanText.match(/(?:calle|avenida|av|pje|pasaje)\s+([a-z0-9\s]+?)(?=\s+(?:casa|pedido|nota|orden|número|numero|p\d|c\d|#|n\d|$))/i);
     
-    if (!street) {
-      // Si no hay palabra "calle", intentamos extraer el texto que NO son números ni palabras clave
-      const keywords = ['pedido', 'orden', 'casa', 'numero', 'p', 'c', 'n', 'num', 'no', 'nota'];
+    if (streetMatch) {
+      street = streetMatch[1];
+    } else {
+      // Si no hay palabra "calle", filtramos la frase completa
+      const keywords = ['pedido', 'orden', 'casa', 'numero', 'p', 'c', 'n', 'num', 'no', 'nota', '#', 'nº'];
       const words = cleanText.split(' ');
-      const streetWords = words.filter(w => 
-        !w.match(/^\d+$/) && 
-        !keywords.includes(w) &&
-        w.length > 2 // Evitamos preposiciones cortas
-      );
-      if (streetWords.length > 0) {
-        street = streetWords.join(' ');
-      }
+      
+      const streetWords = words.filter(w => {
+        // Quitamos si es solo un número
+        if (w.match(/^\d+$/)) return false;
+        // Quitamos si es una palabra clave exacta
+        if (keywords.includes(w)) return false;
+        // Quitamos si es una palabra clave pegada a un número (ej: p80, c30)
+        if (w.match(/^[a-z]\d+$/)) return false;
+        // Quitamos si es el número de pedido o casa ya detectado
+        if (orderNumber && w.includes(orderNumber)) return false;
+        if (houseNumber && w.includes(houseNumber)) return false;
+        
+        return w.length > 2;
+      });
+      
+      street = streetWords.join(' ');
     }
 
     const navMatch = cleanText.includes('waze') ? 'waze' : cleanText.includes('google') || cleanText.includes('maps') ? 'google' : null;
