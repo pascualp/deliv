@@ -24,9 +24,14 @@ export default function App() {
   const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
-    const savedOrders = localStorage.getItem('deliveryOrders');
-    if (savedOrders) {
-      setOrders(JSON.parse(savedOrders));
+    try {
+      const savedOrders = localStorage.getItem('deliveryOrders');
+      if (savedOrders) {
+        setOrders(JSON.parse(savedOrders));
+      }
+    } catch (err) {
+      console.error('Error loading orders from localStorage', err);
+      localStorage.removeItem('deliveryOrders');
     }
 
     // Escuchar el evento de instalación
