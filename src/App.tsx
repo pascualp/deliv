@@ -132,34 +132,54 @@ export default function App() {
   }, [orders, isLoaded]);
 
   const processVoiceInput = (text: string) => {
-    // Limpiamos el texto de ruidos comunes y duplicados raros como "P8P8"
+    // Limpieza más inteligente: solo quitamos palabras repetidas seguidas (ej: "casa casa" -> "casa")
+    // No usamos regex de caracteres repetidos para no romper números como "11" o "22"
     let cleanText = text.toLowerCase().trim()
-      .replace(/([a-z0-9]+)\1+/gi, '$1') // Quita repeticiones inmediatas de caracteres
+      .replace(/\b(\w+)\s+\1\b/g, '$1') 
       .replace(/\s+/g, ' ');
 
-    // Intentar detectar el número de pedido
-    // Ahora acepta "p8", "p 8", "pedido 8", "orden 8" o un número al inicio
-    let orderNumber = cleanText.match(/(?:pedido|orden|p)\s*(\d+)/)?.[1];
-    if (!orderNumber) {
-      const firstNum = cleanText.match(/^\d+/);
-      if (firstNum) orderNumber = firstNum[0];
+    // 1. EXTRAER TODOS LOS NÚMEROS DE LA FRASE
+    const allNumbers = cleanText.match(/\d+/g) || [];
+    
+    // 2. DETECTAR NÚMERO DE PEDIDO
+    // Buscamos: pedido 8, p8, orden 8, #8, n8, num 8
+    let orderNumber = cleanText.match(/(?:pedido|orden|p|#|n|num|nº)\s*(\d+)/i)?.[1];
+    
+    // 3. DETECTAR NÚMERO DE CASA
+    // Buscamos: casa 30, c30, no 30, numero 30, n 30
+    let houseNumber = cleanText.match(/(?:casa|c|no|numero|n|num|nº)\s*(\d+)/i)?.[1];
+    
+    // Si el número de casa y pedido son el mismo (porque el regex pescó el mismo), 
+    // intentamos diferenciarlos por posición
+    if (orderNumber && houseNumber && orderNumber === houseNumber) {
+      // Si dijo "pedido X casa Y", el primer regex de pedido suele ganar.
+      // Buscamos específicamente el de casa que NO sea el de pedido
+      const houseMatches = cleanText.match(/(?:casa|c|no|numero|n|num|nº)\s*(\d+)/gi);
+      if (houseMatches && houseMatches.length > 1) {
+        houseNumber = houseMatches[1].replace(/\D/g, '');
+      } else if (allNumbers.length >= 2) {
+        // Si hay dos números y el regex se confundió, el segundo suele ser la casa
+        houseNumber = allNumbers[allNumbers.length - 1];
+      }
     }
 
-    // Intentar detectar el número de casa
-    let houseNumber = cleanText.match(/(?:casa|número|numero|nº|no|n)\s*(\d+)/)?.[1];
-    if (!houseNumber) {
-      // Si hay un número al final de la frase
-      const lastNum = cleanText.match(/\s(\d+)$/);
-      if (lastNum) houseNumber = lastNum[0].trim();
-    }
+    // Si después de todo no hay números detectados pero hay números en la frase:
+    if (!orderNumber && allNumbers.length > 0) orderNumber = allNumbers[0];
+    if (!houseNumber && allNumbers.length > 1) houseNumber = allNumbers[allNumbers.length - 1];
 
-    // Intentar detectar la calle
-    let street = cleanText.match(/(?:calle|avenida|av|pje|pasaje)\s+([a-z0-9\s]+?)(?=\s+(?:casa|pedido|nota|orden|número|numero|p\d|$))/i)?.[1];
+    // 4. DETECTAR CALLE
+    // Buscamos lo que esté después de "calle", "av", etc.
+    let street = cleanText.match(/(?:calle|avenida|av|pje|pasaje)\s+([a-z0-9\s]+?)(?=\s+(?:casa|pedido|nota|orden|número|numero|p\d|c\d|#|n\d|$))/i)?.[1];
     
     if (!street) {
-      // Si no hay palabra "calle", buscamos texto entre números
+      // Si no hay palabra "calle", intentamos extraer el texto que NO son números ni palabras clave
+      const keywords = ['pedido', 'orden', 'casa', 'numero', 'p', 'c', 'n', 'num', 'no', 'nota'];
       const words = cleanText.split(' ');
-      const streetWords = words.filter(w => !w.match(/^\d+$/) && !['pedido', 'orden', 'casa', 'numero', 'p'].includes(w));
+      const streetWords = words.filter(w => 
+        !w.match(/^\d+$/) && 
+        !keywords.includes(w) &&
+        w.length > 2 // Evitamos preposiciones cortas
+      );
       if (streetWords.length > 0) {
         street = streetWords.join(' ');
       }
