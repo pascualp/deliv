@@ -24,68 +24,82 @@ export default function App() {
   const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
+    // Inicialización segura
+    console.log("App mounting...");
+    
     try {
       const savedOrders = localStorage.getItem('deliveryOrders');
       if (savedOrders) {
-        setOrders(JSON.parse(savedOrders));
+        const parsed = JSON.parse(savedOrders);
+        if (Array.isArray(parsed)) {
+          setOrders(parsed);
+        }
       }
     } catch (err) {
-      console.error('Error loading orders from localStorage', err);
+      console.error('Error loading orders', err);
       localStorage.removeItem('deliveryOrders');
     }
 
-    // Escuchar el evento de instalación
-    window.addEventListener('beforeinstallprompt', (e: any) => {
+    const initSpeech = () => {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        try {
+          recognitionRef.current = new SpeechRecognition();
+          recognitionRef.current.continuous = true;
+          recognitionRef.current.lang = 'es-ES';
+          recognitionRef.current.interimResults = true;
+
+          recognitionRef.current.onresult = (event: any) => {
+            let interimTranscript = '';
+            let finalTranscript = '';
+
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+              if (event.results[i].isFinal) {
+                finalTranscript += event.results[i][0].transcript;
+              } else {
+                interimTranscript += event.results[i][0].transcript;
+              }
+            }
+
+            setTranscriptPreview(finalTranscript || interimTranscript);
+
+            if (finalTranscript) {
+              addOrderFromVoice(finalTranscript);
+              setTimeout(() => {
+                setTranscriptPreview('');
+                recognitionRef.current?.stop();
+              }, 1500);
+            }
+          };
+
+          recognitionRef.current.onerror = (event: any) => {
+            console.error('Speech error:', event.error);
+            if (event.error === 'not-allowed') {
+              setError('Micrófono bloqueado.');
+            }
+            setIsListening(false);
+          };
+
+          recognitionRef.current.onend = () => setIsListening(false);
+        } catch (e) {
+          console.error("Speech init error", e);
+        }
+      } else {
+        setError('Dictado no soportado.');
+      }
+    };
+
+    initSpeech();
+
+    const handleBeforeInstall = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
-    });
-
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = true;
-      recognitionRef.current.lang = 'es-ES';
-      recognitionRef.current.interimResults = true;
-
-      recognitionRef.current.onresult = (event: any) => {
-        let interimTranscript = '';
-        let finalTranscript = '';
-
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            finalTranscript += event.results[i][0].transcript;
-          } else {
-            interimTranscript += event.results[i][0].transcript;
-          }
-        }
-
-        setTranscriptPreview(finalTranscript || interimTranscript);
-
-        if (finalTranscript) {
-          addOrderFromVoice(finalTranscript);
-          setTimeout(() => {
-            setTranscriptPreview('');
-            recognitionRef.current?.stop();
-          }, 1500);
-        }
-      };
-
-      recognitionRef.current.onerror = (event: any) => {
-        console.error('Speech recognition error', event.error);
-        if (event.error === 'not-allowed') {
-          setError('Micrófono bloqueado. Actívalo en los ajustes del navegador.');
-        } else {
-          setError(`Error de voz: ${event.error}`);
-        }
-        setIsListening(false);
-      };
-
-      recognitionRef.current.onend = () => {
-        setIsListening(false);
-      };
-    } else {
-      setError('Tu navegador no soporta dictado por voz.');
-    }
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+    
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+    };
   }, []);
 
   useEffect(() => {
@@ -139,9 +153,22 @@ export default function App() {
     setOrders(prev => prev.filter(o => o.id !== id));
   };
 
+  const resetApp = () => {
+    localStorage.removeItem('deliveryOrders');
+    window.location.reload();
+  };
+
   return (
     <div className="min-h-screen bg-zinc-900 text-white p-4 flex flex-col gap-6">
-      <h1 className="text-2xl font-bold text-center">Delivery Quick Notes</h1>
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Quick Notes</h1>
+        <button 
+          onClick={resetApp}
+          className="text-[10px] text-zinc-600 uppercase tracking-widest hover:text-red-500 transition-colors"
+        >
+          Reiniciar App
+        </button>
+      </div>
       
       {deferredPrompt && (
         <div className="bg-blue-600 p-4 rounded-2xl flex flex-col gap-3 animate-pulse border-2 border-white/20">
