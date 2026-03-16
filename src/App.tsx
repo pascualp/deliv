@@ -90,7 +90,7 @@ export default function App() {
             if (recognitionRef.current) {
               recognitionRef.current.stop();
             }
-          }, 2500); 
+          }, 6000); 
         };
 
         recognition.onstart = () => {
@@ -139,7 +139,7 @@ export default function App() {
       'quince': '15', 'dieciseis': '16', 'diecisiete': '17', 'dieciocho': '18', 'diecinueve': '19',
       'veinte': '20', 'veintiuno': '21', 'veintidos': '22', 'veintitres': '23', 'veinticuatro': '24',
       'veinticinco': '25', 'treinta': '30', 'cuarenta': '40', 'cincuenta': '50', 'sesenta': '60',
-      'setenta': '70', 'ochenta': '80', 'noventa': '90', 'cien': '100', 'ciento': '100'
+      'setenta': '70', 'ochenta': '80', 'noventa': '90', 'cien': '100', 'ciento': '100', 'mil': '1000'
     };
     let result = text;
     const sortedWords = Object.keys(map).sort((a, b) => b.length - a.length);
@@ -442,11 +442,12 @@ export default function App() {
                     >
                       <img 
                         src={order.navigator === 'google' 
-                          ? "https://upload.wikimedia.org/wikipedia/commons/thumb/a/aa/Google_Maps_icon_%282020%29.svg/512px-Google_Maps_icon_%282020%29.svg.png" 
-                          : "https://upload.wikimedia.org/wikipedia/commons/thumb/6/66/Waze_icon.svg/512px-Waze_icon.svg.png"
+                          ? "https://www.gstatic.com/images/branding/product/2x/maps_512dp.png" 
+                          : "https://cdn.worldvectorlogo.com/logos/waze.svg"
                         } 
                         className="w-8 h-8 object-contain" 
                         alt={order.navigator} 
+                        referrerPolicy="no-referrer"
                       />
                     </button>
                   )}
@@ -469,7 +470,7 @@ export default function App() {
                       : 'bg-zinc-800 text-zinc-500 opacity-40 grayscale'
                     }`}
                   >
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/a/aa/Google_Maps_icon_%282020%29.svg/512px-Google_Maps_icon_%282020%29.svg.png" className="w-3 h-3" alt="" />
+                    <img src="https://www.gstatic.com/images/branding/product/2x/maps_512dp.png" className="w-3 h-3" alt="" referrerPolicy="no-referrer" />
                     Google
                   </button>
                   <button 
@@ -480,7 +481,7 @@ export default function App() {
                       : 'bg-zinc-800 text-zinc-500 opacity-40 grayscale'
                     }`}
                   >
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/66/Waze_icon.svg/512px-Waze_icon.svg.png" className="w-3 h-3" alt="" />
+                    <img src="https://cdn.worldvectorlogo.com/logos/waze.svg" className="w-3 h-3" alt="" referrerPolicy="no-referrer" />
                     Waze
                   </button>
                 </div>
