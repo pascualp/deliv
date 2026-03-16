@@ -18,6 +18,8 @@ declare global {
 export default function App() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isListening, setIsListening] = useState(false);
+  const [transcriptPreview, setTranscriptPreview] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const recognitionRef = useRef<any>(null);
 
@@ -36,17 +38,48 @@ export default function App() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
       recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = false;
+      recognitionRef.current.continuous = true;
       recognitionRef.current.lang = 'es-ES';
-      recognitionRef.current.interimResults = false;
+      recognitionRef.current.interimResults = true;
 
       recognitionRef.current.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        addOrderFromVoice(transcript);
+        let interimTranscript = '';
+        let finalTranscript = '';
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          } else {
+            interimTranscript += event.results[i][0].transcript;
+          }
+        }
+
+        setTranscriptPreview(finalTranscript || interimTranscript);
+
+        if (finalTranscript) {
+          addOrderFromVoice(finalTranscript);
+          setTimeout(() => {
+            setTranscriptPreview('');
+            recognitionRef.current?.stop();
+          }, 1500);
+        }
+      };
+
+      recognitionRef.current.onerror = (event: any) => {
+        console.error('Speech recognition error', event.error);
+        if (event.error === 'not-allowed') {
+          setError('Micrófono bloqueado. Actívalo en los ajustes del navegador.');
+        } else {
+          setError(`Error de voz: ${event.error}`);
+        }
         setIsListening(false);
       };
 
-      recognitionRef.current.onerror = () => setIsListening(false);
+      recognitionRef.current.onend = () => {
+        setIsListening(false);
+      };
+    } else {
+      setError('Tu navegador no soporta dictado por voz.');
     }
   }, []);
 
@@ -81,12 +114,19 @@ export default function App() {
   };
 
   const toggleListening = () => {
+    setError(null);
     if (isListening) {
       recognitionRef.current?.stop();
-      setIsListening(false);
     } else {
-      recognitionRef.current?.start();
-      setIsListening(true);
+      try {
+        setTranscriptPreview('');
+        recognitionRef.current?.start();
+        setIsListening(true);
+      } catch (err) {
+        console.error('Failed to start recognition', err);
+        setError('No se pudo iniciar el micrófono.');
+        setIsListening(false);
+      }
     }
   };
 
@@ -116,12 +156,25 @@ export default function App() {
         </div>
       )}
 
+      {error && (
+        <div className="bg-red-900/50 border border-red-500 text-red-200 p-3 rounded-xl text-center text-sm">
+          {error}
+        </div>
+      )}
+
       <button 
         onClick={toggleListening}
-        className={`w-full py-8 rounded-2xl flex items-center justify-center gap-4 text-xl font-bold ${isListening ? 'bg-red-600' : 'bg-emerald-600'}`}
+        className={`w-full py-8 rounded-2xl flex flex-col items-center justify-center gap-2 text-xl font-bold transition-all ${isListening ? 'bg-red-600 shadow-[0_0_20px_rgba(220,38,38,0.5)]' : 'bg-emerald-600'}`}
       >
-        {isListening ? <MicOff size={40} /> : <Mic size={40} />}
-        {isListening ? 'Escuchando...' : 'Dictar Nuevo Pedido'}
+        <div className="flex items-center gap-4">
+          {isListening ? <MicOff size={40} /> : <Mic size={40} />}
+          {isListening ? 'Escuchando...' : 'Dictar Nuevo Pedido'}
+        </div>
+        {isListening && transcriptPreview && (
+          <div className="text-sm font-normal opacity-80 mt-2 px-4 italic">
+            "{transcriptPreview}"
+          </div>
+        )}
       </button>
 
       <div className="flex flex-col gap-4">
