@@ -99,12 +99,21 @@ export default function App() {
       <h1 className="text-2xl font-bold text-center">Delivery Quick Notes</h1>
       
       {deferredPrompt && (
-        <button 
-          onClick={handleInstallClick}
-          className="w-full py-4 bg-blue-600 rounded-2xl flex items-center justify-center gap-2 text-lg font-bold"
-        >
-          <Download size={24} /> Instalar Aplicación
-        </button>
+        <div className="bg-blue-600 p-4 rounded-2xl flex flex-col gap-3 animate-pulse border-2 border-white/20">
+          <div className="flex items-center gap-3">
+            <Download size={28} className="text-white" />
+            <div>
+              <p className="font-bold text-lg">¡Instala la App!</p>
+              <p className="text-sm opacity-90">Úsala sin navegador y más rápido.</p>
+            </div>
+          </div>
+          <button 
+            onClick={handleInstallClick}
+            className="w-full py-3 bg-white text-blue-600 rounded-xl font-bold text-lg shadow-lg"
+          >
+            INSTALAR AHORA
+          </button>
+        </div>
       )}
 
       <button 
