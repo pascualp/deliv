@@ -163,13 +163,10 @@ export default function App() {
     }
   };
 
-  const openMaps = (order: Order, type: 'google' | 'waze') => {
-    const query = `${order.street} ${order.houseNumber}`.trim();
-    if (!query) return;
-    
+  const openMaps = (type: 'google' | 'waze') => {
     const url = type === 'google' 
-      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`
-      : `https://waze.com/ul?q=${encodeURIComponent(query)}`;
+      ? 'https://maps.google.com'
+      : 'https://www.waze.com/ul';
     
     window.open(url, '_blank');
   };
@@ -288,42 +285,62 @@ export default function App() {
           {orders.map((order) => (
             <div 
               key={order.id} 
-              className={`bg-zinc-900/50 border p-4 rounded-3xl flex items-center justify-between group transition-all duration-300 animate-in fade-in zoom-in ${
-                order.navigator === 'google' ? 'border-blue-500/50 bg-blue-500/5' : 
-                order.navigator === 'waze' ? 'border-cyan-400/50 bg-cyan-400/5' : 
+              className={`bg-zinc-900/50 border p-4 rounded-3xl flex items-center justify-between group transition-all duration-500 animate-in fade-in zoom-in ${
+                order.navigator === 'google' ? 'border-blue-500/30 bg-blue-500/5' : 
+                order.navigator === 'waze' ? 'border-cyan-400/30 bg-cyan-400/5' : 
                 'border-zinc-900'
               }`}
             >
               <div className="flex-1">
-                <div className="flex items-center gap-4 mb-1">
-                  <div className="flex flex-col">
-                    <span className="text-[9px] uppercase font-bold text-zinc-600 tracking-tighter">Pedido</span>
-                    <span className="text-xl font-black text-white leading-none">#{order.orderNumber}</span>
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-4">
+                    <div className="flex flex-col">
+                      <span className="text-[9px] uppercase font-bold text-zinc-600 tracking-tighter">Pedido</span>
+                      <span className="text-xl font-black text-white leading-none">#{order.orderNumber}</span>
+                    </div>
+                    <div className="w-px h-8 bg-zinc-800" />
+                    <div className="flex flex-col">
+                      <span className="text-[9px] uppercase font-bold text-zinc-600 tracking-tighter">Casa</span>
+                      <span className="text-xl font-black text-emerald-500 leading-none">{order.houseNumber}</span>
+                    </div>
                   </div>
-                  <div className="w-px h-8 bg-zinc-800" />
-                  <div className="flex flex-col">
-                    <span className="text-[9px] uppercase font-bold text-zinc-600 tracking-tighter">Casa</span>
-                    <span className="text-xl font-black text-emerald-500 leading-none">{order.houseNumber}</span>
-                  </div>
-                  {order.street && (
-                    <>
-                      <div className="w-px h-8 bg-zinc-800" />
-                      <div className="flex flex-col">
-                        <span className="text-[9px] uppercase font-bold text-zinc-600 tracking-tighter">Calle</span>
-                        <span className="text-sm font-black text-zinc-300 leading-none truncate max-w-[80px]">{order.street}</span>
-                      </div>
-                    </>
+
+                  {/* Logo de Navegador Grande (Clicable para cambiar de app) */}
+                  {order.navigator && (
+                    <button 
+                      onClick={() => openMaps(order.navigator!)}
+                      className={`p-2 rounded-2xl animate-in zoom-in duration-500 transition-transform active:scale-95 ${
+                        order.navigator === 'google' ? 'bg-blue-500/20 ring-1 ring-blue-500/50' : 'bg-cyan-400/20 ring-1 ring-cyan-400/50'
+                      }`}
+                      title={`Cambiar a ${order.navigator}`}
+                    >
+                      <img 
+                        src={order.navigator === 'google' 
+                          ? "https://www.google.com/images/branding/product/ico/maps15_24dp.ico" 
+                          : "https://waze.com/favicon.ico"
+                        } 
+                        className="w-8 h-8 object-contain" 
+                        alt={order.navigator} 
+                      />
+                    </button>
                   )}
                 </div>
+
+                {order.street && (
+                  <div className="flex items-center gap-2 mb-3 bg-zinc-950/50 p-2 rounded-xl border border-zinc-800/50">
+                    <span className="text-[9px] uppercase font-bold text-zinc-600 tracking-tighter">Calle:</span>
+                    <span className="text-sm font-bold text-zinc-200 truncate">{order.street}</span>
+                  </div>
+                )}
                 
-                {/* Selector de Navegador (Solo visual) */}
-                <div className="flex gap-2 mt-3">
+                {/* Selector de Navegador */}
+                <div className="flex gap-2">
                   <button 
                     onClick={() => setNavigator(order.id, 'google')}
-                    className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
+                    className={`flex-1 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
                       order.navigator === 'google' 
-                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' 
-                      : 'bg-zinc-800 text-zinc-500 opacity-40'
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/40 scale-[1.02]' 
+                      : 'bg-zinc-800 text-zinc-500 opacity-40 grayscale'
                     }`}
                   >
                     <img src="https://www.google.com/images/branding/product/ico/maps15_24dp.ico" className="w-3 h-3" alt="" />
@@ -331,10 +348,10 @@ export default function App() {
                   </button>
                   <button 
                     onClick={() => setNavigator(order.id, 'waze')}
-                    className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
+                    className={`flex-1 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
                       order.navigator === 'waze' 
-                      ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/20' 
-                      : 'bg-zinc-800 text-zinc-500 opacity-40'
+                      ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/40 scale-[1.02]' 
+                      : 'bg-zinc-800 text-zinc-500 opacity-40 grayscale'
                     }`}
                   >
                     <img src="https://waze.com/favicon.ico" className="w-3 h-3" alt="" />
