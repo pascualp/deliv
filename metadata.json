@@ -1,0 +1,5 @@
+{
+  "name": "Delivery Quick Notes",
+  "description": "App rápida para dictar y guardar datos de pedidos de delivery usando voz.",
+  "requestFramePermissions": ["microphone"]
+}
