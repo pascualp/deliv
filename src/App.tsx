@@ -5,7 +5,9 @@ interface Order {
   id: string;
   orderNumber: string;
   houseNumber: string;
+  street: string;
   notes: string;
+  navigator?: 'google' | 'waze' | null;
   timestamp: number;
 }
 
@@ -17,6 +19,8 @@ export default function App() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const recognitionRef = useRef<any>(null);
+  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const fullTranscriptRef = useRef('');
 
   // Carga inicial ultra-segura
   useEffect(() => {
@@ -57,14 +61,27 @@ export default function App() {
             if (event.results[i].isFinal) final += event.results[i][0].transcript;
             else interim += event.results[i][0].transcript;
           }
-          setTranscriptPreview(final || interim);
+          
+          const currentText = final || interim;
+          setTranscriptPreview(currentText);
+          
           if (final) {
-            processVoiceInput(final);
-            setTimeout(() => {
-              setTranscriptPreview('');
-              recognition.stop();
-            }, 1000);
+            fullTranscriptRef.current += ' ' + final;
           }
+
+          // Reiniciar el temporizador de silencio cada vez que el usuario habla
+          if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+          silenceTimerRef.current = setTimeout(() => {
+            if (recognitionRef.current && isListening) {
+              recognitionRef.current.stop();
+            }
+          }, 2000); // Esperar 2 segundos de silencio antes de cerrar
+        };
+
+        recognition.onstart = () => {
+          setIsListening(true);
+          fullTranscriptRef.current = '';
+          setError(null);
         };
 
         recognition.onerror = (event: any) => {
@@ -73,7 +90,15 @@ export default function App() {
           setIsListening(false);
         };
 
-        recognition.onend = () => setIsListening(false);
+        recognition.onend = () => {
+          setIsListening(false);
+          if (fullTranscriptRef.current.trim()) {
+            processVoiceInput(fullTranscriptRef.current);
+            fullTranscriptRef.current = '';
+            setTranscriptPreview('');
+          }
+          if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+        };
         recognitionRef.current = recognition;
       } catch (e) {
         console.error("Failed to init speech", e);
@@ -96,17 +121,26 @@ export default function App() {
     const lower = text.toLowerCase();
     const orderMatch = lower.match(/(?:pedido|orden)\s*(\d+)/);
     const houseMatch = lower.match(/(?:casa|número|numero)\s*(\d+)/);
+    const streetMatch = lower.match(/(?:calle|avenida|av|pje|pasaje)\s+([a-z0-9\s]+?)(?=\s+(?:casa|pedido|nota|orden|$))/i);
+    const navMatch = lower.includes('waze') ? 'waze' : lower.includes('google') || lower.includes('maps') ? 'google' : null;
     const noteParts = lower.split(/nota\s+/i);
 
     const newOrder: Order = {
       id: Math.random().toString(36).substr(2, 9),
       orderNumber: orderMatch ? orderMatch[1] : '?',
       houseNumber: houseMatch ? houseMatch[1] : '?',
+      street: streetMatch ? streetMatch[1].trim() : '',
       notes: noteParts.length > 1 ? noteParts[1].trim() : '',
+      navigator: navMatch,
       timestamp: Date.now()
     };
 
     setOrders(prev => [newOrder, ...prev].slice(0, 5));
+    
+    // Vibración para Android
+    if ('vibrate' in navigator) {
+      navigator.vibrate(50);
+    }
   };
 
   const toggleListening = () => {
@@ -114,18 +148,35 @@ export default function App() {
       setError("Tu navegador no soporta voz");
       return;
     }
-    setError(null);
+    
     if (isListening) {
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       recognitionRef.current.stop();
     } else {
       try {
+        setError(null);
         recognitionRef.current.start();
-        setIsListening(true);
       } catch (e) {
-        setError("Error al abrir micro");
-        setIsListening(false);
+        console.error("Start error", e);
+        // Si ya está corriendo, no hacemos nada
       }
     }
+  };
+
+  const openMaps = (order: Order, type: 'google' | 'waze') => {
+    const query = `${order.street} ${order.houseNumber}`.trim();
+    if (!query) return;
+    
+    const url = type === 'google' 
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`
+      : `https://waze.com/ul?q=${encodeURIComponent(query)}`;
+    
+    window.open(url, '_blank');
+  };
+
+  const setNavigator = (id: string, nav: 'google' | 'waze' | null) => {
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, navigator: o.navigator === nav ? null : nav } : o));
+    if ('vibrate' in navigator) navigator.vibrate(30);
   };
 
   const removeOrder = (id: string) => {
@@ -237,7 +288,11 @@ export default function App() {
           {orders.map((order) => (
             <div 
               key={order.id} 
-              className="bg-zinc-900/50 border border-zinc-900 p-4 rounded-3xl flex items-center justify-between group hover:border-zinc-800 transition-colors animate-in fade-in zoom-in duration-300"
+              className={`bg-zinc-900/50 border p-4 rounded-3xl flex items-center justify-between group transition-all duration-300 animate-in fade-in zoom-in ${
+                order.navigator === 'google' ? 'border-blue-500/50 bg-blue-500/5' : 
+                order.navigator === 'waze' ? 'border-cyan-400/50 bg-cyan-400/5' : 
+                'border-zinc-900'
+              }`}
             >
               <div className="flex-1">
                 <div className="flex items-center gap-4 mb-1">
@@ -250,16 +305,52 @@ export default function App() {
                     <span className="text-[9px] uppercase font-bold text-zinc-600 tracking-tighter">Casa</span>
                     <span className="text-xl font-black text-emerald-500 leading-none">{order.houseNumber}</span>
                   </div>
+                  {order.street && (
+                    <>
+                      <div className="w-px h-8 bg-zinc-800" />
+                      <div className="flex flex-col">
+                        <span className="text-[9px] uppercase font-bold text-zinc-600 tracking-tighter">Calle</span>
+                        <span className="text-sm font-black text-zinc-300 leading-none truncate max-w-[80px]">{order.street}</span>
+                      </div>
+                    </>
+                  )}
                 </div>
+                
+                {/* Selector de Navegador (Solo visual) */}
+                <div className="flex gap-2 mt-3">
+                  <button 
+                    onClick={() => setNavigator(order.id, 'google')}
+                    className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
+                      order.navigator === 'google' 
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' 
+                      : 'bg-zinc-800 text-zinc-500 opacity-40'
+                    }`}
+                  >
+                    <img src="https://www.google.com/images/branding/product/ico/maps15_24dp.ico" className="w-3 h-3" alt="" />
+                    Google
+                  </button>
+                  <button 
+                    onClick={() => setNavigator(order.id, 'waze')}
+                    className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
+                      order.navigator === 'waze' 
+                      ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/20' 
+                      : 'bg-zinc-800 text-zinc-500 opacity-40'
+                    }`}
+                  >
+                    <img src="https://waze.com/favicon.ico" className="w-3 h-3" alt="" />
+                    Waze
+                  </button>
+                </div>
+
                 {order.notes && (
-                  <p className="text-xs text-zinc-400 italic mt-2 border-t border-zinc-800/50 pt-2">
+                  <p className="text-xs text-zinc-400 italic mt-3 border-t border-zinc-800/50 pt-2">
                     {order.notes}
                   </p>
                 )}
               </div>
               <button 
                 onClick={() => removeOrder(order.id)}
-                className="p-3 text-zinc-700 hover:text-red-500 hover:bg-red-500/10 rounded-2xl transition-all"
+                className="ml-4 p-3 text-zinc-700 hover:text-red-500 hover:bg-red-500/10 rounded-2xl transition-all"
               >
                 <Trash2 size={20} />
               </button>
@@ -268,7 +359,10 @@ export default function App() {
 
           {orders.length === 0 && (
             <div className="py-12 text-center border-2 border-dashed border-zinc-900 rounded-[40px]">
-              <p className="text-zinc-600 text-sm font-medium italic">Di algo como:<br/>"Pedido 123 casa 45 nota sin cebolla"</p>
+              <p className="text-zinc-600 text-sm font-medium italic px-4">
+                Di algo como:<br/>
+                <span className="text-emerald-500/70">"Pedido 123 calle mayor casa 45 en Waze"</span>
+              </p>
             </div>
           )}
         </div>
