@@ -55,23 +55,14 @@ export default function App() {
         recognition.interimResults = true;
 
         recognition.onresult = (event: any) => {
-          let interim = '';
-          let final = '';
-          for (let i = event.resultIndex; i < event.results.length; ++i) {
-            if (event.results[i].isFinal) {
-              final += event.results[i][0].transcript;
-            } else {
-              interim += event.results[i][0].transcript;
-            }
+          let currentFull = '';
+          for (let i = 0; i < event.results.length; ++i) {
+            currentFull += event.results[i][0].transcript;
           }
           
-          if (final) {
-            fullTranscriptRef.current += ' ' + final;
-          }
-
-          // Mostrar todo lo acumulado + lo que se está procesando ahora
-          const displayValue = (fullTranscriptRef.current + ' ' + interim).trim();
-          setTranscriptPreview(displayValue);
+          // Actualizamos la referencia y el estado de previsualización
+          fullTranscriptRef.current = currentFull;
+          setTranscriptPreview(currentFull.trim());
           
           // Reiniciar el temporizador de silencio cada vez que el usuario habla
           if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
@@ -122,18 +113,41 @@ export default function App() {
   }, [orders, isLoaded]);
 
   const processVoiceInput = (text: string) => {
-    const lower = text.toLowerCase();
-    const orderMatch = lower.match(/(?:pedido|orden)\s*(\d+)/);
-    const houseMatch = lower.match(/(?:casa|número|numero)\s*(\d+)/);
-    const streetMatch = lower.match(/(?:calle|avenida|av|pje|pasaje)\s+([a-z0-9\s]+?)(?=\s+(?:casa|pedido|nota|orden|$))/i);
+    const lower = text.toLowerCase().trim();
+    
+    // Intentar detectar el número de pedido (ej: "pedido 123" o solo "123" al principio)
+    let orderNumber = lower.match(/(?:pedido|orden)\s*(\d+)/)?.[1];
+    if (!orderNumber) {
+      const firstNum = lower.match(/^\d+/);
+      if (firstNum) orderNumber = firstNum[0];
+    }
+
+    // Intentar detectar el número de casa
+    let houseNumber = lower.match(/(?:casa|número|numero|nº|no)\s*(\d+)/)?.[1];
+    if (!houseNumber) {
+      // Si hay un número al final de la frase después de un espacio
+      const lastNum = lower.match(/\s(\d+)$/);
+      if (lastNum) houseNumber = lastNum[0].trim();
+    }
+
+    // Intentar detectar la calle
+    let street = lower.match(/(?:calle|avenida|av|pje|pasaje)\s+([a-z0-9\s]+?)(?=\s+(?:casa|pedido|nota|orden|número|numero|$))/i)?.[1];
+    if (!street) {
+      // Si no hay palabra "calle", intentamos agarrar lo que esté entre el pedido y el número de casa
+      const parts = lower.split(/\s\d+/);
+      if (parts.length > 1) {
+        street = parts[1].trim();
+      }
+    }
+
     const navMatch = lower.includes('waze') ? 'waze' : lower.includes('google') || lower.includes('maps') ? 'google' : null;
     const noteParts = lower.split(/nota\s+/i);
 
     const newOrder: Order = {
       id: Math.random().toString(36).substr(2, 9),
-      orderNumber: orderMatch ? orderMatch[1] : '?',
-      houseNumber: houseMatch ? houseMatch[1] : '?',
-      street: streetMatch ? streetMatch[1].trim() : '',
+      orderNumber: orderNumber || 'S/N',
+      houseNumber: houseNumber || 'S/N',
+      street: street?.trim() || 'Calle no detectada',
       notes: noteParts.length > 1 ? noteParts[1].trim() : '',
       navigator: navMatch,
       timestamp: Date.now()
