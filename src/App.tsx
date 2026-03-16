@@ -50,32 +50,51 @@ export default function App() {
     if (SpeechRecognition) {
       try {
         const recognition = new SpeechRecognition();
-        recognition.continuous = true;
+        // Cambiamos a continuous: false para evitar errores de duplicación en Android
+        // Reiniciaremos la escucha manualmente si es necesario
+        recognition.continuous = false; 
         recognition.lang = 'es-ES';
         recognition.interimResults = true;
 
         recognition.onresult = (event: any) => {
-          let currentFull = '';
-          for (let i = 0; i < event.results.length; ++i) {
-            currentFull += event.results[i][0].transcript;
+          let interim = '';
+          let final = '';
+          
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            const transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+              final += transcript;
+            } else {
+              interim += transcript;
+            }
           }
           
-          // Actualizamos la referencia y el estado de previsualización
-          fullTranscriptRef.current = currentFull;
-          setTranscriptPreview(currentFull.trim());
+          if (final) {
+            // Filtro para evitar que palabras idénticas se peguen (ej: "casa casa")
+            const lastWords = fullTranscriptRef.current.trim().split(' ');
+            const newWords = final.trim().split(' ');
+            
+            if (lastWords[lastWords.length - 1].toLowerCase() !== newWords[0].toLowerCase()) {
+              fullTranscriptRef.current += ' ' + final;
+            } else {
+              // Si la primera palabra nueva es igual a la última vieja, solo añadimos el resto
+              fullTranscriptRef.current += ' ' + newWords.slice(1).join(' ');
+            }
+          }
+
+          const displayValue = (fullTranscriptRef.current + ' ' + interim).trim();
+          setTranscriptPreview(displayValue);
           
-          // Reiniciar el temporizador de silencio cada vez que el usuario habla
           if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
           silenceTimerRef.current = setTimeout(() => {
             if (recognitionRef.current) {
               recognitionRef.current.stop();
             }
-          }, 2000); // Esperar 2 segundos de silencio antes de cerrar
+          }, 2500); 
         };
 
         recognition.onstart = () => {
           setIsListening(true);
-          fullTranscriptRef.current = '';
           setError(null);
         };
 
@@ -113,35 +132,41 @@ export default function App() {
   }, [orders, isLoaded]);
 
   const processVoiceInput = (text: string) => {
-    const lower = text.toLowerCase().trim();
-    
-    // Intentar detectar el número de pedido (ej: "pedido 123" o solo "123" al principio)
-    let orderNumber = lower.match(/(?:pedido|orden)\s*(\d+)/)?.[1];
+    // Limpiamos el texto de ruidos comunes y duplicados raros como "P8P8"
+    let cleanText = text.toLowerCase().trim()
+      .replace(/([a-z0-9]+)\1+/gi, '$1') // Quita repeticiones inmediatas de caracteres
+      .replace(/\s+/g, ' ');
+
+    // Intentar detectar el número de pedido
+    // Ahora acepta "p8", "p 8", "pedido 8", "orden 8" o un número al inicio
+    let orderNumber = cleanText.match(/(?:pedido|orden|p)\s*(\d+)/)?.[1];
     if (!orderNumber) {
-      const firstNum = lower.match(/^\d+/);
+      const firstNum = cleanText.match(/^\d+/);
       if (firstNum) orderNumber = firstNum[0];
     }
 
     // Intentar detectar el número de casa
-    let houseNumber = lower.match(/(?:casa|número|numero|nº|no)\s*(\d+)/)?.[1];
+    let houseNumber = cleanText.match(/(?:casa|número|numero|nº|no|n)\s*(\d+)/)?.[1];
     if (!houseNumber) {
-      // Si hay un número al final de la frase después de un espacio
-      const lastNum = lower.match(/\s(\d+)$/);
+      // Si hay un número al final de la frase
+      const lastNum = cleanText.match(/\s(\d+)$/);
       if (lastNum) houseNumber = lastNum[0].trim();
     }
 
     // Intentar detectar la calle
-    let street = lower.match(/(?:calle|avenida|av|pje|pasaje)\s+([a-z0-9\s]+?)(?=\s+(?:casa|pedido|nota|orden|número|numero|$))/i)?.[1];
+    let street = cleanText.match(/(?:calle|avenida|av|pje|pasaje)\s+([a-z0-9\s]+?)(?=\s+(?:casa|pedido|nota|orden|número|numero|p\d|$))/i)?.[1];
+    
     if (!street) {
-      // Si no hay palabra "calle", intentamos agarrar lo que esté entre el pedido y el número de casa
-      const parts = lower.split(/\s\d+/);
-      if (parts.length > 1) {
-        street = parts[1].trim();
+      // Si no hay palabra "calle", buscamos texto entre números
+      const words = cleanText.split(' ');
+      const streetWords = words.filter(w => !w.match(/^\d+$/) && !['pedido', 'orden', 'casa', 'numero', 'p'].includes(w));
+      if (streetWords.length > 0) {
+        street = streetWords.join(' ');
       }
     }
 
-    const navMatch = lower.includes('waze') ? 'waze' : lower.includes('google') || lower.includes('maps') ? 'google' : null;
-    const noteParts = lower.split(/nota\s+/i);
+    const navMatch = cleanText.includes('waze') ? 'waze' : cleanText.includes('google') || cleanText.includes('maps') ? 'google' : null;
+    const noteParts = cleanText.split(/nota\s+/i);
 
     const newOrder: Order = {
       id: Math.random().toString(36).substr(2, 9),
