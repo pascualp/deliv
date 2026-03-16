@@ -136,13 +136,12 @@ export default function App() {
       'cero': '0', 'uno': '1', 'una': '1', 'dos': '2', 'tres': '3', 'cuatro': '4',
       'cinco': '5', 'seis': '6', 'siete': '7', 'ocho': '8', 'nueve': '9',
       'diez': '10', 'once': '11', 'doce': '12', 'trece': '13', 'catorce': '14',
-      'quince': '15', 'dieciséis': '16', 'diecisiete': '17', 'dieciocho': '18', 'diecinueve': '19',
-      'veinte': '20', 'veintiuno': '21', 'veintidós': '22', 'veintitrés': '23', 'veinticuatro': '24',
+      'quince': '15', 'dieciseis': '16', 'diecisiete': '17', 'dieciocho': '18', 'diecinueve': '19',
+      'veinte': '20', 'veintiuno': '21', 'veintidos': '22', 'veintitres': '23', 'veinticuatro': '24',
       'veinticinco': '25', 'treinta': '30', 'cuarenta': '40', 'cincuenta': '50', 'sesenta': '60',
-      'setenta': '70', 'ochenta': '80', 'noventa': '90', 'cien': '100'
+      'setenta': '70', 'ochenta': '80', 'noventa': '90', 'cien': '100', 'ciento': '100'
     };
     let result = text;
-    // Ordenar por longitud descendente para evitar que "veinte" pise a "veintiuno"
     const sortedWords = Object.keys(map).sort((a, b) => b.length - a.length);
     sortedWords.forEach(word => {
       const reg = new RegExp(`\\b${word}\\b`, 'g');
@@ -152,21 +151,17 @@ export default function App() {
   };
 
   const processVoiceInput = (text: string) => {
-    // Normalizar texto: quitar acentos y convertir palabras a números
+    // 1. NORMALIZACIÓN Y LIMPIEZA
     let cleanText = text.toLowerCase().trim()
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // Quita acentos (número -> numero)
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     
     cleanText = wordsToNumbers(cleanText);
-    
-    // Limpieza básica de duplicados
-    cleanText = cleanText
-      .replace(/\b(\w+)\s+\1\b/g, '$1') 
-      .replace(/\s+/g, ' ');
+    cleanText = cleanText.replace(/\b(\w+)\s+\1\b/g, '$1').replace(/\s+/g, ' ');
 
-    // 1. EXTRAER TODOS LOS NÚMEROS DE LA FRASE
-    const allNumbers = cleanText.match(/\d+/g) || [];
+    // 2. IDENTIFICAR TODOS LOS NÚMEROS Y SUS POSICIONES
+    const numberMatches = Array.from(cleanText.matchAll(/\d+/g));
+    const allNumbers = numberMatches.map(m => m[0]);
     
-    // Si la frase es SOLO un número (ej: "80"), lo ponemos como pedido directamente
     if (cleanText.match(/^\d+$/)) {
       const num = cleanText.trim();
       const newOrder: Order = {
@@ -182,55 +177,58 @@ export default function App() {
       return;
     }
 
-    // 2. DETECTAR NÚMERO DE PEDIDO
-    let orderNumber = cleanText.match(/(?:pedido|orden|p|#|n|num|nº)\s*(\d+)/i)?.[1];
-    
-    // Si no se detectó con palabra clave, pero hay números, el primero suele ser el pedido
-    if (!orderNumber && allNumbers.length > 0) {
-      orderNumber = allNumbers[0];
-    }
-    
-    // 3. DETECTAR NÚMERO DE CASA
-    let houseNumber = cleanText.match(/(?:casa|c|no|numero|n|num|nº)\s*(\d+)/i)?.[1];
-    
-    // Si el número de casa es el mismo que el de pedido (error de regex), buscamos el siguiente número
-    if (orderNumber && houseNumber && orderNumber === houseNumber) {
-      if (allNumbers.length >= 2) {
-        // Si hay más números, el último suele ser la casa
-        houseNumber = allNumbers[allNumbers.length - 1];
+    // 3. EXTRACCIÓN INTELIGENTE POR PALABRAS CLAVE
+    let orderNumber = '';
+    let houseNumber = '';
+
+    // Buscar pedido por palabra clave
+    const orderMatch = cleanText.match(/(?:pedido|orden|p|#|n|num|no)\s*(\d+)/i);
+    if (orderMatch) orderNumber = orderMatch[1];
+
+    // Buscar casa por palabra clave
+    const houseMatch = cleanText.match(/(?:casa|c|numero|n|num|no)\s*(\d+)/i);
+    if (houseMatch) {
+      // Si el número de casa detectado es el mismo que el de pedido, buscamos si hay otro
+      if (houseMatch[1] === orderNumber) {
+        const otherHouseMatch = Array.from(cleanText.matchAll(/(?:casa|c|numero|n|num|no)\s*(\d+)/gi))[1];
+        if (otherHouseMatch) houseNumber = otherHouseMatch[1];
+      } else {
+        houseNumber = houseMatch[1];
       }
     }
 
-    // Si aún no hay casa, pero hay al menos 2 números, el último es la casa
-    if (!houseNumber && allNumbers.length >= 2) {
-      houseNumber = allNumbers[allNumbers.length - 1];
+    // 4. ASIGNACIÓN POR POSICIÓN (Si fallan las palabras clave)
+    if (!orderNumber && allNumbers.length > 0) {
+      orderNumber = allNumbers[0];
     }
 
-    // 4. DETECTAR CALLE (Limpieza agresiva)
+    if (!houseNumber && allNumbers.length >= 1) {
+      // Buscamos un número que no sea el de pedido
+      const remainingNumbers = allNumbers.filter(n => n !== orderNumber);
+      if (remainingNumbers.length > 0) {
+        // El último número suele ser la casa en dictados de delivery
+        houseNumber = remainingNumbers[remainingNumbers.length - 1];
+      }
+    }
+
+    // 5. DETECTAR CALLE
     let street = '';
-    const streetMatch = cleanText.match(/(?:calle|avenida|av|pje|pasaje)\s+([a-z0-9\s]+?)(?=\s+(?:casa|pedido|nota|orden|número|numero|p\d|c\d|#|n\d|$))/i);
+    const streetKeywords = ['calle', 'avenida', 'av', 'pje', 'pasaje'];
+    const streetMatch = cleanText.match(/(?:calle|avenida|av|pje|pasaje)\s+([a-z0-9\s]+?)(?=\s+(?:casa|pedido|nota|orden|numero|p\d|c\d|#|n\d|$))/i);
     
     if (streetMatch) {
       street = streetMatch[1];
     } else {
-      // Si no hay palabra "calle", filtramos la frase completa
-      const keywords = ['pedido', 'orden', 'casa', 'numero', 'p', 'c', 'n', 'num', 'no', 'nota', '#', 'nº'];
+      const excludeKeywords = ['pedido', 'orden', 'casa', 'numero', 'p', 'c', 'n', 'num', 'no', 'nota', '#', 'nº'];
       const words = cleanText.split(' ');
-      
       const streetWords = words.filter(w => {
-        // Quitamos si es solo un número
         if (w.match(/^\d+$/)) return false;
-        // Quitamos si es una palabra clave exacta
-        if (keywords.includes(w)) return false;
-        // Quitamos si es una palabra clave pegada a un número (ej: p80, c30, #80)
+        if (excludeKeywords.includes(w)) return false;
         if (w.match(/^[a-z#]\d+$/)) return false;
-        // Quitamos si contiene el número de pedido o casa ya detectado
         if (orderNumber && (w === orderNumber || w.includes(orderNumber))) return false;
         if (houseNumber && (w === houseNumber || w.includes(houseNumber))) return false;
-        
         return w.length > 2;
       });
-      
       street = streetWords.join(' ');
     }
 
