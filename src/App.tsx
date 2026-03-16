@@ -58,21 +58,25 @@ export default function App() {
           let interim = '';
           let final = '';
           for (let i = event.resultIndex; i < event.results.length; ++i) {
-            if (event.results[i].isFinal) final += event.results[i][0].transcript;
-            else interim += event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+              final += event.results[i][0].transcript;
+            } else {
+              interim += event.results[i][0].transcript;
+            }
           }
-          
-          const currentText = final || interim;
-          setTranscriptPreview(currentText);
           
           if (final) {
             fullTranscriptRef.current += ' ' + final;
           }
 
+          // Mostrar todo lo acumulado + lo que se está procesando ahora
+          const displayValue = (fullTranscriptRef.current + ' ' + interim).trim();
+          setTranscriptPreview(displayValue);
+          
           // Reiniciar el temporizador de silencio cada vez que el usuario habla
           if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
           silenceTimerRef.current = setTimeout(() => {
-            if (recognitionRef.current && isListening) {
+            if (recognitionRef.current) {
               recognitionRef.current.stop();
             }
           }, 2000); // Esperar 2 segundos de silencio antes de cerrar
@@ -166,9 +170,21 @@ export default function App() {
   const openMaps = (type: 'google' | 'waze') => {
     const url = type === 'google' 
       ? 'https://maps.google.com'
-      : 'https://www.waze.com/ul';
+      : 'waze://';
     
-    window.open(url, '_blank');
+    // Intentar abrir la app directamente con el esquema waze://
+    // Si falla (por ejemplo en PC), usamos el fallback de web
+    if (type === 'waze') {
+      window.location.href = url;
+      // Fallback por si no tiene la app instalada o está en PC
+      setTimeout(() => {
+        if (document.hasFocus()) {
+          window.open('https://www.waze.com/ul', '_blank');
+        }
+      }, 500);
+    } else {
+      window.open(url, '_blank');
+    }
   };
 
   const setNavigator = (id: string, nav: 'google' | 'waze' | null) => {
@@ -267,10 +283,14 @@ export default function App() {
       </div>
 
       {/* Transcript Preview */}
-      {isListening && transcriptPreview && (
-        <div className="mb-8 text-center animate-in fade-in slide-in-from-bottom-4 duration-300">
-          <p className="text-zinc-500 text-xs uppercase font-bold tracking-widest mb-2">Detectando...</p>
-          <p className="text-xl font-medium text-emerald-400 italic leading-tight">"{transcriptPreview}"</p>
+      {isListening && (
+        <div className="mb-8 text-center animate-in fade-in slide-in-from-bottom-4 duration-300 min-h-[60px]">
+          <p className="text-zinc-500 text-[10px] uppercase font-black tracking-[0.2em] mb-3">Escuchando ahora...</p>
+          <div className="bg-zinc-900/80 backdrop-blur-sm p-4 rounded-2xl border border-emerald-500/20 shadow-xl">
+            <p className="text-lg font-bold text-emerald-400 leading-tight">
+              {transcriptPreview || 'Empieza a hablar...'}
+            </p>
+          </div>
         </div>
       )}
 
