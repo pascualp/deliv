@@ -131,15 +131,57 @@ export default function App() {
     }
   }, [orders, isLoaded]);
 
+  const wordsToNumbers = (text: string) => {
+    const map: { [key: string]: string } = {
+      'cero': '0', 'uno': '1', 'una': '1', 'dos': '2', 'tres': '3', 'cuatro': '4',
+      'cinco': '5', 'seis': '6', 'siete': '7', 'ocho': '8', 'nueve': '9',
+      'diez': '10', 'once': '11', 'doce': '12', 'trece': '13', 'catorce': '14',
+      'quince': '15', 'dieciséis': '16', 'diecisiete': '17', 'dieciocho': '18', 'diecinueve': '19',
+      'veinte': '20', 'veintiuno': '21', 'veintidós': '22', 'veintitrés': '23', 'veinticuatro': '24',
+      'veinticinco': '25', 'treinta': '30', 'cuarenta': '40', 'cincuenta': '50', 'sesenta': '60',
+      'setenta': '70', 'ochenta': '80', 'noventa': '90', 'cien': '100'
+    };
+    let result = text;
+    // Ordenar por longitud descendente para evitar que "veinte" pise a "veintiuno"
+    const sortedWords = Object.keys(map).sort((a, b) => b.length - a.length);
+    sortedWords.forEach(word => {
+      const reg = new RegExp(`\\b${word}\\b`, 'g');
+      result = result.replace(reg, map[word]);
+    });
+    return result;
+  };
+
   const processVoiceInput = (text: string) => {
-    // Limpieza básica
+    // Normalizar texto: quitar acentos y convertir palabras a números
     let cleanText = text.toLowerCase().trim()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // Quita acentos (número -> numero)
+    
+    cleanText = wordsToNumbers(cleanText);
+    
+    // Limpieza básica de duplicados
+    cleanText = cleanText
       .replace(/\b(\w+)\s+\1\b/g, '$1') 
       .replace(/\s+/g, ' ');
 
     // 1. EXTRAER TODOS LOS NÚMEROS DE LA FRASE
     const allNumbers = cleanText.match(/\d+/g) || [];
     
+    // Si la frase es SOLO un número (ej: "80"), lo ponemos como pedido directamente
+    if (cleanText.match(/^\d+$/)) {
+      const num = cleanText.trim();
+      const newOrder: Order = {
+        id: Math.random().toString(36).substr(2, 9),
+        orderNumber: num,
+        houseNumber: 'S/N',
+        street: 'Calle no detectada',
+        notes: '',
+        navigator: null,
+        timestamp: Date.now()
+      };
+      setOrders(prev => [newOrder, ...prev].slice(0, 5));
+      return;
+    }
+
     // 2. DETECTAR NÚMERO DE PEDIDO
     let orderNumber = cleanText.match(/(?:pedido|orden|p|#|n|num|nº)\s*(\d+)/i)?.[1];
     
@@ -402,8 +444,8 @@ export default function App() {
                     >
                       <img 
                         src={order.navigator === 'google' 
-                          ? "https://upload.wikimedia.org/wikipedia/commons/a/aa/Google_Maps_icon_%282020%29.svg" 
-                          : "https://upload.wikimedia.org/wikipedia/commons/6/66/Waze_icon.svg"
+                          ? "https://upload.wikimedia.org/wikipedia/commons/thumb/a/aa/Google_Maps_icon_%282020%29.svg/512px-Google_Maps_icon_%282020%29.svg.png" 
+                          : "https://upload.wikimedia.org/wikipedia/commons/thumb/6/66/Waze_icon.svg/512px-Waze_icon.svg.png"
                         } 
                         className="w-8 h-8 object-contain" 
                         alt={order.navigator} 
@@ -429,7 +471,7 @@ export default function App() {
                       : 'bg-zinc-800 text-zinc-500 opacity-40 grayscale'
                     }`}
                   >
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/a/aa/Google_Maps_icon_%282020%29.svg" className="w-3 h-3" alt="" />
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/a/aa/Google_Maps_icon_%282020%29.svg/512px-Google_Maps_icon_%282020%29.svg.png" className="w-3 h-3" alt="" />
                     Google
                   </button>
                   <button 
@@ -440,7 +482,7 @@ export default function App() {
                       : 'bg-zinc-800 text-zinc-500 opacity-40 grayscale'
                     }`}
                   >
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/6/66/Waze_icon.svg" className="w-3 h-3" alt="" />
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/66/Waze_icon.svg/512px-Waze_icon.svg.png" className="w-3 h-3" alt="" />
                     Waze
                   </button>
                 </div>
